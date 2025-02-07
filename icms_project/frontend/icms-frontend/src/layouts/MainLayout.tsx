@@ -1,181 +1,88 @@
-import { ReactNode, useState } from 'react';
+import React, { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   AppBar,
-  Avatar,
   Box,
   CssBaseline,
-  Divider,
   Drawer,
   IconButton,
   List,
+  ListItem,
+  ListItemButton,
   ListItemIcon,
   ListItemText,
-  Menu,
-  MenuItem,
   Toolbar,
-  Tooltip,
   Typography,
   useTheme,
-  ListItemButton,
-  Collapse,
+  useMediaQuery,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
   Dashboard as DashboardIcon,
-  People as PeopleIcon,
-  CalendarToday as CalendarTodayIcon,
-  Receipt as ReceiptIcon,
-  LocalHospital as LocalHospitalIcon,
-  Assessment as AssessmentIcon,
-  Security as SecurityIcon,
-  Inventory as InventoryIcon,
-  BugReport as BugReportIcon,
-  Chat as ChatIcon,
-  Healing as HealingIcon,
-  Notifications as NotificationsIcon,
-  ExpandLess,
-  ExpandMore,
+  CalendarMonth as AppointmentsIcon,
+  People as PatientsIcon,
+  LocalHospital as DoctorsIcon,
+  Receipt as InvoicesIcon,
+  Science as LabIcon,
+  Medication as PrescriptionsIcon,
   Settings as SettingsIcon,
-  Person as PersonIcon,
-  ExitToApp as LogoutIcon,
 } from '@mui/icons-material';
-import { useNavigate, useLocation } from 'react-router-dom';
-
-const drawerWidth = 280;
 
 interface MainLayoutProps {
-  children: ReactNode;
+  children: React.ReactNode;
 }
 
-interface NavItem {
-  title: string;
-  icon: JSX.Element;
-  path?: string;
-  children?: NavItem[];
-}
+const drawerWidth = 240;
 
-interface NavItemProps {
-  item: NavItem;
-  depth?: number;
-}
-
-const navItems: NavItem[] = [
-  { title: 'Dashboard', icon: <DashboardIcon />, path: '/' },
-  {
-    title: 'Patient Management',
-    icon: <PeopleIcon />,
-    children: [
-      { title: 'Patients List', icon: <PeopleIcon />, path: '/patients' },
-      { title: 'Registration', icon: <PersonIcon />, path: '/patients/register' },
-      { title: 'Insurance', icon: <SecurityIcon />, path: '/patients/insurance' },
-    ],
-  },
-  {
-    title: 'Appointments',
-    icon: <CalendarTodayIcon />,
-    children: [
-      { title: 'All Appointments', icon: <CalendarTodayIcon />, path: '/appointments' },
-      { title: 'Waiting List', icon: <PeopleIcon />, path: '/appointments/waiting' },
-      { title: 'Resource Allocation', icon: <AssessmentIcon />, path: '/appointments/resources' },
-    ],
-  },
-  {
-    title: 'Clinical',
-    icon: <LocalHospitalIcon />,
-    children: [
-      { title: 'Lab Orders', icon: <BugReportIcon />, path: '/clinical/lab' },
-      { title: 'Prescriptions', icon: <ReceiptIcon />, path: '/clinical/prescriptions' },
-      { title: 'Vaccinations', icon: <HealingIcon />, path: '/clinical/vaccinations' },
-    ],
-  },
-  {
-    title: 'Billing',
-    icon: <ReceiptIcon />,
-    children: [
-      { title: 'Invoices', icon: <ReceiptIcon />, path: '/billing/invoices' },
-      { title: 'Insurance Claims', icon: <SecurityIcon />, path: '/billing/claims' },
-      { title: 'Payments', icon: <ReceiptIcon />, path: '/billing/payments' },
-    ],
-  },
-  { title: 'Reports', icon: <AssessmentIcon />, path: '/reports' },
-  { title: 'Inventory', icon: <InventoryIcon />, path: '/inventory' },
-  { title: 'Disease Database', icon: <BugReportIcon />, path: '/diseases' },
-  { title: 'Chat Assistant', icon: <ChatIcon />, path: '/chat' },
-  { title: 'Settings', icon: <SettingsIcon />, path: '/settings' },
-  { title: 'Profile', icon: <PersonIcon />, path: '/profile' },
+const menuItems = [
+  { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
+  { text: 'Appointments', icon: <AppointmentsIcon />, path: '/appointments' },
+  { text: 'Patients', icon: <PatientsIcon />, path: '/patients' },
+  { text: 'Doctors', icon: <DoctorsIcon />, path: '/doctors' },
+  { text: 'Invoices', icon: <InvoicesIcon />, path: '/invoices' },
+  { text: 'Lab Orders', icon: <LabIcon />, path: '/lab-orders' },
+  { text: 'Prescriptions', icon: <PrescriptionsIcon />, path: '/prescriptions' },
+  { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
 ];
 
-export default function MainLayout({ children }: MainLayoutProps) {
+const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const theme = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
-  const [open, setOpen] = useState(true);
-  const [expandedItems, setExpandedItems] = useState<string[]>([]);
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleDrawerToggle = () => {
-    setOpen(!open);
+    setMobileOpen(!mobileOpen);
   };
 
-  const handleItemClick = (path: string | undefined) => {
-    if (path) {
-      navigate(path);
-    }
-  };
-
-  const handleExpandClick = (title: string) => {
-    setExpandedItems((prev) =>
-      prev.includes(title) ? prev.filter((item) => item !== title) : [...prev, title]
-    );
-  };
-
-  const handleProfileMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleProfileMenuClose = () => {
-    setAnchorEl(null);
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    navigate('/login');
-  };
-
-  const renderNavItem = ({ item, depth = 0 }: NavItemProps) => {
-    const hasChildren = item.children && item.children.length > 0;
-    const isExpanded = expandedItems.includes(item.title);
-    const isActive = location.pathname === item.path;
-
-    return (
-      <Box key={item.title}>
-        <ListItemButton
-          onClick={() => {
-            if (hasChildren) {
-              handleExpandClick(item.title);
-            } else {
-              handleItemClick(item.path);
-            }
-          }}
-          sx={{
-            pl: depth * 3 + 2,
-            backgroundColor: isActive ? 'action.selected' : 'transparent',
-          }}
-        >
-          <ListItemIcon>{item.icon}</ListItemIcon>
-          <ListItemText primary={item.title} />
-          {hasChildren && (isExpanded ? <ExpandLess /> : <ExpandMore />)}
-        </ListItemButton>
-        {hasChildren && (
-          <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-            <List component="div" disablePadding>
-              {item.children?.map((child) => renderNavItem({ item: child, depth: depth + 1 }))}
-            </List>
-          </Collapse>
-        )}
-      </Box>
-    );
-  };
+  const drawer = (
+    <Box>
+      <Toolbar>
+        <Typography variant="h6" noWrap component="div">
+          ICMS
+        </Typography>
+      </Toolbar>
+      <List>
+        {menuItems.map((item) => (
+          <ListItem key={item.text} disablePadding>
+            <ListItemButton
+              selected={location.pathname === item.path}
+              onClick={() => {
+                navigate(item.path);
+                if (isMobile) {
+                  handleDrawerToggle();
+                }
+              }}
+            >
+              <ListItemIcon>{item.icon}</ListItemIcon>
+              <ListItemText primary={item.text} />
+            </ListItemButton>
+          </ListItem>
+        ))}
+      </List>
+    </Box>
+  );
 
   return (
     <Box sx={{ display: 'flex' }}>
@@ -183,111 +90,78 @@ export default function MainLayout({ children }: MainLayoutProps) {
       <AppBar
         position="fixed"
         sx={{
-          width: open ? `calc(100% - ${drawerWidth}px)` : '100%',
-          ml: open ? `${drawerWidth}px` : 0,
-          transition: theme.transitions.create(['margin', 'width'], {
-            easing: theme.transitions.easing.sharp,
-            duration: theme.transitions.duration.leavingScreen,
-          }),
+          width: { md: `calc(100% - ${drawerWidth}px)` },
+          ml: { md: `${drawerWidth}px` },
         }}
       >
         <Toolbar>
           <IconButton
             color="inherit"
-            aria-label="toggle drawer"
-            onClick={handleDrawerToggle}
+            aria-label="open drawer"
             edge="start"
-            sx={{ mr: 2 }}
+            onClick={handleDrawerToggle}
+            sx={{ mr: 2, display: { md: 'none' } }}
           >
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            ICMS - Integrated Clinic Management System
+          <Typography variant="h6" noWrap component="div">
+            {menuItems.find((item) => item.path === location.pathname)?.text || 'ICMS'}
           </Typography>
-          <IconButton color="inherit">
-            <NotificationsIcon />
-          </IconButton>
-          <Tooltip title="Account settings">
-            <IconButton
-              onClick={handleProfileMenuOpen}
-              size="small"
-              sx={{ ml: 2 }}
-              aria-controls={Boolean(anchorEl) ? 'account-menu' : undefined}
-              aria-haspopup="true"
-              aria-expanded={Boolean(anchorEl) ? 'true' : undefined}
-            >
-              <Avatar sx={{ width: 32, height: 32 }}>A</Avatar>
-            </IconButton>
-          </Tooltip>
-          <Menu
-            anchorEl={anchorEl}
-            id="account-menu"
-            open={Boolean(anchorEl)}
-            onClose={handleProfileMenuClose}
-            onClick={handleProfileMenuClose}
-            transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-            anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-          >
-            <MenuItem onClick={() => navigate('/profile')}>
-              <ListItemIcon>
-                <PersonIcon fontSize="small" />
-              </ListItemIcon>
-              Profile
-            </MenuItem>
-            <MenuItem onClick={() => navigate('/settings')}>
-              <ListItemIcon>
-                <SettingsIcon fontSize="small" />
-              </ListItemIcon>
-              Settings
-            </MenuItem>
-            <Divider />
-            <MenuItem onClick={handleLogout}>
-              <ListItemIcon>
-                <LogoutIcon fontSize="small" />
-              </ListItemIcon>
-              Logout
-            </MenuItem>
-          </Menu>
         </Toolbar>
       </AppBar>
-      <Drawer
-        sx={{
-          width: drawerWidth,
-          flexShrink: 0,
-          '& .MuiDrawer-paper': {
-            width: drawerWidth,
-            boxSizing: 'border-box',
-          },
-        }}
-        variant="persistent"
-        anchor="left"
-        open={open}
+
+      <Box
+        component="nav"
+        sx={{ width: { md: drawerWidth }, flexShrink: { md: 0 } }}
       >
-        <Toolbar />
-        <Divider />
-        <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
-          <List>
-            {navItems.map((item) => renderNavItem({ item }))}
-          </List>
-        </Box>
-        <Divider />
-      </Drawer>
+        {/* Mobile drawer */}
+        <Drawer
+          variant="temporary"
+          open={mobileOpen}
+          onClose={handleDrawerToggle}
+          ModalProps={{
+            keepMounted: true, // Better open performance on mobile
+          }}
+          sx={{
+            display: { xs: 'block', md: 'none' },
+            '& .MuiDrawer-paper': {
+              boxSizing: 'border-box',
+              width: drawerWidth,
+            },
+          }}
+        >
+          {drawer}
+        </Drawer>
+
+        {/* Desktop drawer */}
+        <Drawer
+          variant="permanent"
+          sx={{
+            display: { xs: 'none', md: 'block' },
+            '& .MuiDrawer-paper': {
+              boxSizing: 'border-box',
+              width: drawerWidth,
+            },
+          }}
+          open
+        >
+          {drawer}
+        </Drawer>
+      </Box>
+
       <Box
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
-          width: `calc(100% - ${open ? drawerWidth : 0}px)`,
-          ml: `${open ? drawerWidth : 0}px`,
-          transition: theme.transitions.create(['margin', 'width'], {
-            easing: theme.transitions.easing.sharp,
-            duration: theme.transitions.duration.leavingScreen,
-          }),
+          width: { md: `calc(100% - ${drawerWidth}px)` },
+          minHeight: '100vh',
         }}
       >
-        <Toolbar />
+        <Toolbar /> {/* This toolbar is for spacing below the AppBar */}
         {children}
       </Box>
     </Box>
   );
-}
+};
+
+export default MainLayout;

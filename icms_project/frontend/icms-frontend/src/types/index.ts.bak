@@ -1,0 +1,509 @@
+export interface Config {
+  apiUrl: string;
+  workingHours: {
+    start: string;
+    end: string;
+  };
+  appointmentTypes: Array<{
+    value: string;
+    label: string;
+  }>;
+  appointmentStatus: Array<{
+    value: string;
+    label: string;
+  }>;
+}
+
+export interface User {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  specialization?: string;
+  phone?: string;
+  address?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Patient {
+  id: number;
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  dateOfBirth: string;
+  gender: string;
+  bloodGroup?: string;
+  allergies?: string;
+  medicalHistory?: string;
+  insuranceProvider?: string;
+  insuranceNumber?: string;
+  emergencyContact?: {
+    name: string;
+    phone: string;
+    relationship: string;
+  };
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Appointment {
+  id: number;
+  dateTime: string;
+  type: 'regular' | 'follow-up' | 'emergency';
+  status: 'scheduled' | 'completed' | 'cancelled';
+  roomNumber: string;
+  patientId: number;
+  doctorId: number;
+  notes?: string;
+  patient?: Patient;
+  doctor?: User;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Service {
+  id: number;
+  name: string;
+  description: string;
+  cost: number;
+  duration: number;
+  category: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Invoice {
+  id: number;
+  patientId: number;
+  patient?: Patient;
+  date: string;
+  dueDate: string;
+  items: Array<{
+    serviceId: number;
+    service?: Service;
+    quantity: number;
+    unitPrice: number;
+  }>;
+  subtotal: number;
+  tax: number;
+  total: number;
+  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Payment {
+  id: number;
+  invoiceId: number;
+  amount: number;
+  method: 'cash' | 'credit_card' | 'debit_card' | 'insurance';
+  status: 'pending' | 'completed' | 'failed' | 'refunded';
+  transactionId?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InsuranceClaim {
+  id: number;
+  invoiceId: number;
+  patientId: number;
+  provider: string;
+  policyNumber: string;
+  amount: number;
+  status: 'pending' | 'submitted' | 'approved' | 'rejected' | 'resubmitted';
+  submissionDate?: string;
+  approvalDate?: string;
+  rejectionReason?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LabOrder {
+  id: number;
+  patientId: number;
+  doctorId: number;
+  appointmentId?: number;
+  tests: Array<{
+    testId: number;
+    name: string;
+    instructions?: string;
+  }>;
+  status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+  priority: 'routine' | 'urgent' | 'stat';
+  notes?: string;
+  results?: LabResult[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LabTest {
+  id: number;
+  name: string;
+  description: string;
+  category: string;
+  cost: number;
+  turnaroundTime: number;
+  requirements?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LabResult {
+  id: number;
+  orderId: number;
+  testId: number;
+  value: string;
+  unit: string;
+  referenceRange?: string;
+  interpretation?: string;
+  performedBy: number;
+  performedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Prescription {
+  id: number;
+  patientId: number;
+  doctorId: number;
+  appointmentId?: number;
+  medications: Array<{
+    medicationId: number;
+    dosage: string;
+    frequency: string;
+    duration: string;
+    instructions?: string;
+  }>;
+  status: 'active' | 'completed' | 'discontinued' | 'expired';
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Medication {
+  id: number;
+  name: string;
+  genericName: string;
+  category: string;
+  form: string;
+  strength: string;
+  manufacturer: string;
+  description?: string;
+  sideEffects?: string;
+  contraindications?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Chat {
+  id: number;
+  participants: number[];
+  messages: Message[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Config {
+  apiUrl: string;
+  workingHours: {
+    start: string;
+    end: string;
+  };
+  appointmentTypes: Array<{
+    value: string;
+    label: string;
+  }>;
+  appointmentStatus: Array<{
+    value: string;
+    label: string;
+  }>;
+}
+
+export interface Service {
+  id: number;
+  name: string;
+  description: string;
+  cost: number;
+  duration: number;
+  category: string;
+  status: 'active' | 'inactive';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Invoice {
+  id: number;
+  patientId: number;
+  patient?: Patient;
+  services: Array<{
+    serviceId: number;
+    service?: Service;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+  }>;
+  subtotal: number;
+  tax: number;
+  discount?: number;
+  total: number;
+  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
+  dueDate: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Payment {
+  id: number;
+  invoiceId: number;
+  invoice?: Invoice;
+  amount: number;
+  paymentMethod: 'cash' | 'card' | 'bank_transfer' | 'insurance';
+  transactionId?: string;
+  status: 'pending' | 'completed' | 'failed' | 'refunded';
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface InsuranceClaim {
+  id: number;
+  patientId: number;
+  patient?: Patient;
+  invoiceId: number;
+  invoice?: Invoice;
+  insuranceProvider: string;
+  policyNumber: string;
+  claimNumber?: string;
+  amount: number;
+  status: 'pending' | 'approved' | 'rejected' | 'paid';
+  submissionDate: string;
+  approvalDate?: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface LabTest {
+  id: number;
+  name: string;
+  description: string;
+  category: string;
+  cost: number;
+  normalRange?: string;
+  unit?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface LabOrder {
+  id: number;
+  patientId: number;
+  patient?: Patient;
+  doctorId: number;
+  doctor?: User;
+  tests: Array<{
+    testId: number;
+    test?: LabTest;
+    result?: string;
+    status: 'pending' | 'completed' | 'cancelled';
+  }>;
+  priority: 'routine' | 'urgent' | 'stat';
+  status: 'ordered' | 'in_progress' | 'completed' | 'cancelled';
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface LabResult {
+  id: number;
+  orderId: number;
+  order?: LabOrder;
+  testId: number;
+  test?: LabTest;
+  result: string;
+  normalRange?: string;
+  interpretation?: string;
+  performedBy: number;
+  performedByUser?: User;
+  verifiedBy?: number;
+  verifiedByUser?: User;
+  status: 'pending' | 'completed' | 'verified';
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Medication {
+  id: number;
+  name: string;
+  genericName: string;
+  category: string;
+  form: string;
+  strength: string;
+  manufacturer?: string;
+  description?: string;
+  sideEffects?: string[];
+  contraindications?: string[];
+  interactions?: string[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Prescription {
+  id: number;
+  patientId: number;
+  patient?: Patient;
+  doctorId: number;
+  doctor?: User;
+  medications: Array<{
+    medicationId: number;
+    medication?: Medication;
+    dosage: string;
+    frequency: string;
+    duration: string;
+    instructions?: string;
+  }>;
+  diagnosis?: string;
+  notes?: string;
+  status: 'active' | 'completed' | 'cancelled';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Chat {
+  id: number;
+  participants: Array<{
+    userId: number;
+    user?: User;
+    role: 'patient' | 'doctor' | 'staff';
+  }>;
+  lastMessage?: Message;
+  unreadCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Message {
+  id: number;
+  chatId: number;
+  senderId: number;
+  sender?: User;
+  content: string;
+  attachments?: Array<{
+    type: 'image' | 'document';
+    url: string;
+    name: string;
+  }>;
+  readBy?: number[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Vaccination {
+  id: number;
+  patientId: number;
+  patient?: Patient;
+  vaccineName: string;
+  dose: string;
+  date: string;
+  nextDueDate?: string;
+  administeredBy: number;
+  administeredByUser?: User;
+  batchNumber?: string;
+  manufacturer?: string;
+  notes?: string;
+  status: 'scheduled' | 'completed' | 'cancelled';
+  createdAt?: string;
+  updatedAt?: string;
+}
+  id: number;
+  patientId: number;
+  patient?: Patient;
+  vaccineName: string;
+  dose: string;
+  date: string;
+  nextDueDate?: string;
+  administeredBy: number;
+  administeredByUser?: User;
+  batchNumber?: string;
+  manufacturer?: string;
+  notes?: string;
+  status: 'scheduled' | 'completed' | 'cancelled';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface InventoryItem {
+  id: number;
+  name: string;
+  description: string;
+  category: string;
+  quantity: number;
+  unit: string;
+  minQuantity: number;
+  maxQuantity: number;
+  reorderPoint: number;
+  cost: number;
+  supplier?: string;
+  location?: string;
+  expiryDate?: string;
+  status: 'in_stock' | 'low_stock' | 'out_of_stock' | 'expired';
+  createdAt?: string;
+  updatedAt?: string;
+}
+  id: number;
+  name: string;
+  description: string;
+  category: string;
+  quantity: number;
+  unit: string;
+  minQuantity: number;
+  maxQuantity: number;
+  reorderPoint: number;
+  cost: number;
+  supplier?: string;
+  location?: string;
+  expiryDate?: string;
+  status: 'in_stock' | 'low_stock' | 'out_of_stock' | 'expired';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Disease {
+  id: number;
+  name: string;
+  description: string;
+  symptoms: string[];
+  causes: string[];
+  treatments: string[];
+  preventions: string[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+  id: number;
+  name: string;
+  description: string;
+  symptoms: string[];
+  causes: string[];
+  treatments: string[];
+  preventions: string[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Message {
+  id: number;
+  chatId: number;
+  senderId: number;
+  content: string;
+  type: 'text' | 'image' | 'file';
+  readBy: number[];
+  createdAt: string;
+  updatedAt: string;
+}

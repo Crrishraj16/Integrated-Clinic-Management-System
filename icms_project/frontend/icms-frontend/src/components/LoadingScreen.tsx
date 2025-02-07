@@ -4,7 +4,7 @@ interface LoadingScreenProps {
   message?: string;
 }
 
-export default function LoadingScreen({ message = 'Loading...' }: LoadingScreenProps) {
+const LoadingScreen = ({ message = 'Loading...' }: LoadingScreenProps) => {
   return (
     <Box
       sx={{
@@ -13,13 +13,14 @@ export default function LoadingScreen({ message = 'Loading...' }: LoadingScreenP
         alignItems: 'center',
         justifyContent: 'center',
         minHeight: '100vh',
-        gap: 2,
       }}
     >
-      <CircularProgress size={40} />
-      <Typography color="text.secondary" variant="body1">
+      <CircularProgress />
+      <Typography variant="h6" sx={{ mt: 2 }}>
         {message}
       </Typography>
     </Box>
   );
-}
+};
+
+export default LoadingScreen;
