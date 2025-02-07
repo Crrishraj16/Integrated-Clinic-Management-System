@@ -13,7 +13,7 @@ import {
 } from '@mui/material';
 import { AxiosError } from 'axios';
 import { authAPI } from '../services/api';
-import { LoginCredentials, AuthResponse } from '../types';
+import { LoginCredentials } from '../types';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -47,7 +47,7 @@ const Login: React.FC = () => {
 
     try {
       const { data } = await authAPI.login(formData);
-      localStorage.setItem('token', data.access_token);
+      localStorage.setItem('token', data.token);
       navigate('/dashboard');
     } catch (err) {
       const axiosError = err as AxiosError<{ detail: string }>;
