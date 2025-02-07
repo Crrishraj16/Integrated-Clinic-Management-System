@@ -11,7 +11,8 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "cypress open"
+    "test:e2e": "cypress open",
+    "deploy": "netlify deploy --prod"
   },
   "dependencies": {
     "@emotion/react": "^11.11.3",
