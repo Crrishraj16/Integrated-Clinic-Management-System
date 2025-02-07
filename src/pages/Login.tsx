@@ -48,7 +48,7 @@ const Login: React.FC = () => {
     try {
       const response = await authAPI.login(formData);
       const authResponse = response.data as AuthResponse;
-      localStorage.setItem('token', authResponse.access_token);
+      localStorage.setItem('token', authResponse.token);
       navigate('/dashboard');
     } catch (err) {
       const axiosError = err as AxiosError<{ detail: string }>;
