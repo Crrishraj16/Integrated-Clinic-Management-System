@@ -1,357 +1,268 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import {
-  Box,
-  Typography,
-  Paper,
-  TextField,
-  Button,
-  Grid,
-  Alert,
-  Autocomplete,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  FormHelperText,
+import { 
+  TextField, 
+  Button, 
+  Grid, 
+  Typography, 
+  Container, 
+  Autocomplete 
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers';
-import { Vaccination, Patient, VaccineType } from '../../types';
-import { vaccinationAPI, patientAPI, vaccineAPI } from '../../services/api';
-import LoadingScreen from '../../components/LoadingScreen';
+import { useForm, Controller } from 'react-hook-form';
+import { yupResolver } from '@hookform/resolvers/yup';
+import * as yup from 'yup';
+import { patientAPI, vaccinationAPI } from '../../services/api';
+import { Patient, Vaccination } from '../../types';
+import { useNavigate, useParams } from 'react-router-dom';
 
-const initialVaccinationState: Partial<Vaccination> = {
-  date: new Date().toISOString(),
-  status: 'scheduled',
-  dose_number: 1,
-  notes: '',
-};
+interface VaccinationFormData {
+  patientId: number;
+  vaccineType: string;
+  doseNumber: number;
+  administeredDate: string;
+  batchNumber?: string;
+  administeredBy?: string;
+  administrationSite?: string;
+  adverseReactions?: string;
+}
+
+const validationSchema = yup.object().shape({
+  patientId: yup.number().required('Patient is required'),
+  vaccineType: yup.string().required('Vaccine type is required'),
+  doseNumber: yup.number().positive().required('Dose number is required'),
+  administeredDate: yup.string().required('Administered date is required'),
+});
 
 const VaccinationForm: React.FC = () => {
   const navigate = useNavigate();
-  const { id } = useParams<{ id: string }>();
-  const location = useLocation();
-  const isEdit = !!id;
-
-  const [vaccinationData, setVaccinationData] = useState<Partial<Vaccination>>(
-    initialVaccinationState
-  );
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { id } = useParams<{ id?: string }>();
   const [patients, setPatients] = useState<Patient[]>([]);
-  const [vaccines, setVaccines] = useState<VaccineType[]>([]);
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [selectedVaccine, setSelectedVaccine] = useState<VaccineType | null>(null);
-  const [nextDueDate, setNextDueDate] = useState<Date | null>(null);
+  const [vaccinationData, setVaccinationData] = useState<VaccinationFormData>({
+    patientId: 0,
+    vaccineType: '',
+    doseNumber: 1,
+    administeredDate: new Date().toISOString().split('T')[0],
+    batchNumber: '',
+    administeredBy: '',
+    administrationSite: '',
+    adverseReactions: ''
+  });
+
+  const { 
+    control, 
+    handleSubmit, 
+    setValue,
+    formState: { errors, isSubmitting } 
+  } = useForm<VaccinationFormData>({
+    resolver: yupResolver(validationSchema),
+    defaultValues: vaccinationData
+  });
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchPatients = async () => {
       try {
-        setLoading(true);
-
-        // Fetch patients
-        const patientsResponse = await patientAPI.getAll();
-        setPatients(patientsResponse.data.data);
-
-        // Fetch vaccine types
-        const vaccinesResponse = await vaccineAPI.getTypes();
-        setVaccines(vaccinesResponse.data);
-
-        // If editing, fetch vaccination details
-        if (isEdit && id) {
-          const vaccinationResponse = await vaccinationAPI.getById(parseInt(id));
-          setVaccinationData(vaccinationResponse.data);
-
-          // Set selected patient and vaccine
-          const patient = patientsResponse.data.data.find(
-            (p) => p.id === vaccinationResponse.data.patient_id
-          );
-          const vaccine = vaccinesResponse.data.find(
-            (v) => v.id === vaccinationResponse.data.vaccine_id
-          );
-
-          setSelectedPatient(patient || null);
-          setSelectedVaccine(vaccine || null);
-          setNextDueDate(
-            vaccinationResponse.data.next_due_date
-              ? new Date(vaccinationResponse.data.next_due_date)
-              : null
-          );
-        }
-        // If creating with pre-selected patient
-        else if (location.state?.patientId) {
-          const patient = patientsResponse.data.data.find(
-            (p) => p.id === parseInt(location.state.patientId)
-          );
-          setSelectedPatient(patient || null);
-        }
-
-        setError(null);
-      } catch (err) {
-        setError('Failed to load required data. Please try again.');
-      } finally {
-        setLoading(false);
+        const response = await patientAPI.getAll();
+        setPatients(response.data);
+      } catch (error) {
+        console.error('Failed to fetch patients', error);
       }
     };
 
-    fetchData();
-  }, [id, isEdit, location.state]);
+    fetchPatients();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+    if (id) {
+      const fetchVaccinationDetails = async () => {
+        try {
+          const response = await vaccinationAPI.getById(parseInt(id));
+          const vaccination = response.data;
+          setVaccinationData({
+            patientId: vaccination.patientId,
+            vaccineType: vaccination.vaccineType,
+            doseNumber: vaccination.doseNumber,
+            administeredDate: vaccination.administeredDate,
+            batchNumber: vaccination.batchNumber || '',
+            administeredBy: vaccination.administeredBy || '',
+            administrationSite: vaccination.administrationSite || '',
+            adverseReactions: vaccination.adverseReactions || ''
+          });
+        } catch (error) {
+          console.error('Failed to fetch vaccination details', error);
+        }
+      };
 
-    if (!selectedPatient || !selectedVaccine) {
-      setError('Please select both patient and vaccine');
-      return;
+      fetchVaccinationDetails();
     }
+  }, [id]);
 
-    const vaccinationPayload = {
-      ...vaccinationData,
-      patient_id: selectedPatient.id,
-      vaccine_id: selectedVaccine.id,
-      vaccine_name: selectedVaccine.name,
-      next_due_date: nextDueDate?.toISOString(),
-    };
-
+  const onSubmit = async (data: VaccinationFormData) => {
     try {
-      setLoading(true);
-      if (isEdit && id) {
-        await vaccinationAPI.update(parseInt(id), vaccinationPayload);
+      if (id) {
+        await vaccinationAPI.update(parseInt(id), data);
       } else {
-        await vaccinationAPI.create(vaccinationPayload);
+        await vaccinationAPI.create(data);
       }
       navigate('/clinical/vaccinations');
-    } catch (err) {
-      setError('Failed to save vaccination record. Please try again.');
-    } finally {
-      setLoading(false);
+    } catch (error) {
+      console.error('Failed to save vaccination', error);
     }
   };
-
-  const calculateNextDueDate = (vaccineId: number, doseNumber: number) => {
-    const vaccine = vaccines.find((v) => v.id === vaccineId);
-    if (!vaccine || !vaccine.schedule || doseNumber >= vaccine.schedule.length) {
-      setNextDueDate(null);
-      return;
-    }
-
-    const interval = vaccine.schedule[doseNumber];
-    const nextDate = new Date(vaccinationData.date || new Date());
-    nextDate.setDate(nextDate.getDate() + interval);
-    setNextDueDate(nextDate);
-  };
-
-  if (loading && !vaccinationData) {
-    return <LoadingScreen />;
-  }
 
   return (
-    <Box p={3}>
-      <Paper sx={{ p: 3 }}>
-        <Typography variant="h4" gutterBottom>
-          {isEdit ? 'Edit Vaccination Record' : 'New Vaccination Record'}
-        </Typography>
-
-        {error && (
-          <Alert severity="error" sx={{ mb: 3 }}>
-            {error}
-          </Alert>
-        )}
-
-        <form onSubmit={handleSubmit}>
-          <Grid container spacing={3}>
-            <Grid item xs={12} sm={6}>
-              <Autocomplete
-                value={selectedPatient}
-                onChange={(event, newValue) => {
-                  setSelectedPatient(newValue);
-                }}
-                options={patients}
-                getOptionLabel={(option) => option.full_name}
-                renderInput={(params) => <TextField {...params} label="Patient" required />}
-              />
-            </Grid>
-
-            <Grid item xs={12} sm={6}>
-              <Autocomplete
-                value={selectedVaccine}
-                onChange={(event, newValue) => {
-                  setSelectedVaccine(newValue);
-                  if (newValue) {
-                    calculateNextDueDate(newValue.id, vaccinationData.dose_number || 1);
+    <Container maxWidth="md">
+      <Typography variant="h4" gutterBottom>
+        {id ? 'Edit Vaccination' : 'Add Vaccination'}
+      </Typography>
+      <form onSubmit={handleSubmit(onSubmit)}>
+        <Grid container spacing={3}>
+          <Grid item xs={12}>
+            <Controller
+              name="patientId"
+              control={control}
+              render={({ field }) => (
+                <Autocomplete
+                  {...field}
+                  options={patients}
+                  getOptionLabel={(option) => 
+                    typeof option === 'number' 
+                      ? patients.find(p => p.id === option)?.fullName || '' 
+                      : option.fullName
                   }
-                }}
-                options={vaccines}
-                getOptionLabel={(option) => option.name}
-                renderInput={(params) => <TextField {...params} label="Vaccine" required />}
-              />
-            </Grid>
-
-            <Grid item xs={12} sm={6}>
-              <DatePicker
-                label="Vaccination Date"
-                value={vaccinationData.date ? new Date(vaccinationData.date) : null}
-                onChange={(date) =>
-                  setVaccinationData((prev) => ({
-                    ...prev,
-                    date: date?.toISOString() || new Date().toISOString(),
-                  }))
-                }
-              />
-            </Grid>
-
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="Dose Number"
-                type="number"
-                value={vaccinationData.dose_number || ''}
-                onChange={(e) => {
-                  const doseNumber = parseInt(e.target.value);
-                  setVaccinationData((prev) => ({
-                    ...prev,
-                    dose_number: doseNumber,
-                  }));
-                  if (selectedVaccine) {
-                    calculateNextDueDate(selectedVaccine.id, doseNumber);
-                  }
-                }}
-                inputProps={{ min: 1 }}
-                required
-              />
-            </Grid>
-
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth required>
-                <InputLabel>Status</InputLabel>
-                <Select
-                  value={vaccinationData.status || 'scheduled'}
-                  onChange={(e) =>
-                    setVaccinationData((prev) => ({
-                      ...prev,
-                      status: e.target.value,
-                    }))
-                  }
-                  label="Status"
-                >
-                  <MenuItem value="scheduled">Scheduled</MenuItem>
-                  <MenuItem value="completed">Completed</MenuItem>
-                  <MenuItem value="cancelled">Cancelled</MenuItem>
-                  <MenuItem value="overdue">Overdue</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-
-            <Grid item xs={12} sm={6}>
-              <DatePicker
-                label="Next Due Date"
-                value={nextDueDate}
-                onChange={(date) => setNextDueDate(date)}
-                disabled={!selectedVaccine?.schedule}
-              />
-              {selectedVaccine?.schedule && (
-                <FormHelperText>
-                  Automatically calculated based on vaccine schedule
-                </FormHelperText>
+                  renderInput={(params) => (
+                    <TextField 
+                      {...params} 
+                      label="Patient" 
+                      error={!!errors.patientId}
+                      helperText={errors.patientId?.message}
+                    />
+                  )}
+                  onChange={(_, newValue) => {
+                    setValue('patientId', newValue ? (typeof newValue === 'number' ? newValue : newValue.id) : 0);
+                  }}
+                />
               )}
-            </Grid>
-
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Batch Number"
-                value={vaccinationData.batch_number || ''}
-                onChange={(e) =>
-                  setVaccinationData((prev) => ({
-                    ...prev,
-                    batch_number: e.target.value,
-                  }))
-                }
-              />
-            </Grid>
-
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Administered By"
-                value={vaccinationData.administered_by || ''}
-                onChange={(e) =>
-                  setVaccinationData((prev) => ({
-                    ...prev,
-                    administered_by: e.target.value,
-                  }))
-                }
-              />
-            </Grid>
-
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Site of Administration"
-                value={vaccinationData.administration_site || ''}
-                onChange={(e) =>
-                  setVaccinationData((prev) => ({
-                    ...prev,
-                    administration_site: e.target.value,
-                  }))
-                }
-              />
-            </Grid>
-
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Adverse Reactions"
-                value={vaccinationData.adverse_reactions || ''}
-                onChange={(e) =>
-                  setVaccinationData((prev) => ({
-                    ...prev,
-                    adverse_reactions: e.target.value,
-                  }))
-                }
-                multiline
-                rows={2}
-              />
-            </Grid>
-
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Notes"
-                value={vaccinationData.notes || ''}
-                onChange={(e) =>
-                  setVaccinationData((prev) => ({
-                    ...prev,
-                    notes: e.target.value,
-                  }))
-                }
-                multiline
-                rows={4}
-              />
-            </Grid>
-
-            <Grid item xs={12}>
-              <Box display="flex" gap={2} justifyContent="flex-end">
-                <Button
-                  variant="outlined"
-                  onClick={() => navigate('/clinical/vaccinations')}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  variant="contained"
-                  color="primary"
-                  disabled={loading}
-                >
-                  {isEdit ? 'Update' : 'Create'} Vaccination Record
-                </Button>
-              </Box>
-            </Grid>
+            />
           </Grid>
-        </form>
-      </Paper>
-    </Box>
+          <Grid item xs={12} sm={6}>
+            <Controller
+              name="vaccineType"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  fullWidth
+                  label="Vaccine Type"
+                  error={!!errors.vaccineType}
+                  helperText={errors.vaccineType?.message}
+                />
+              )}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <Controller
+              name="doseNumber"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  fullWidth
+                  type="number"
+                  label="Dose Number"
+                  error={!!errors.doseNumber}
+                  helperText={errors.doseNumber?.message}
+                />
+              )}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <Controller
+              name="administeredDate"
+              control={control}
+              render={({ field }) => (
+                <DatePicker
+                  label="Administered Date"
+                  value={field.value ? new Date(field.value) : null}
+                  onChange={(date) => {
+                    field.onChange(date ? date.toISOString().split('T')[0] : '');
+                  }}
+                  renderInput={(params) => (
+                    <TextField 
+                      {...params} 
+                      fullWidth 
+                      error={!!errors.administeredDate}
+                      helperText={errors.administeredDate?.message}
+                    />
+                  )}
+                />
+              )}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <Controller
+              name="batchNumber"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  fullWidth
+                  label="Batch Number"
+                />
+              )}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <Controller
+              name="administeredBy"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  fullWidth
+                  label="Administered By"
+                />
+              )}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <Controller
+              name="administrationSite"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  fullWidth
+                  label="Administration Site"
+                />
+              )}
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <Controller
+              name="adverseReactions"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  fullWidth
+                  multiline
+                  rows={4}
+                  label="Adverse Reactions"
+                />
+              )}
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <Button 
+              type="submit" 
+              variant="contained" 
+              color="primary" 
+              disabled={isSubmitting}
+            >
+              {id ? 'Update' : 'Create'} Vaccination
+            </Button>
+          </Grid>
+        </Grid>
+      </form>
+    </Container>
   );
 };
 

@@ -1,217 +1,189 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Box,
-  Typography,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableContainer, 
+  TableHead, 
+  TableRow, 
+  Paper, 
+  Typography, 
+  Button, 
   TablePagination,
-  IconButton,
-  Tooltip,
-  Button,
-  TextField,
   Dialog,
   DialogTitle,
   DialogContent,
+  DialogContentText,
   DialogActions,
-  Chip,
+  Alert,
+  Snackbar
 } from '@mui/material';
-import {
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Add as AddIcon,
-  Visibility as ViewIcon,
-  Vaccines as VaccineIcon,
-} from '@mui/icons-material';
+import { Edit, Delete } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { vaccinationAPI } from '../../services/api';
-import { Vaccination } from '../../types';
-import LoadingScreen from '../../components/LoadingScreen';
+import { vaccinationAPI, patientAPI, PaginationParams } from '../../services/api';
+import { Vaccination, Patient, EntityStatus } from '../../types';
 
 const VaccinationList: React.FC = () => {
   const navigate = useNavigate();
   const [vaccinations, setVaccinations] = useState<Vaccination[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [patients, setPatients] = useState<{ [key: number]: Patient }>({});
+  const [totalVaccinations, setTotalVaccinations] = useState(0);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [totalVaccinations, setTotalVaccinations] = useState(0);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [selectedVaccination, setSelectedVaccination] = useState<Vaccination | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
-  const fetchVaccinations = async () => {
+  const fetchVaccinations = async (params: PaginationParams = {}) => {
+    setIsLoading(true);
+    setError(null);
     try {
-      setLoading(true);
       const response = await vaccinationAPI.getAll({
         page: page + 1,
         limit: rowsPerPage,
-        search: searchQuery,
+        ...params
       });
-      setVaccinations(response.data.data);
-      setTotalVaccinations(response.data.total);
-      setError(null);
+
+      const { data, total } = response.data;
+      setVaccinations(data);
+      setTotalVaccinations(total);
+
+      // Fetch patient details for each vaccination
+      const patientIds = [...new Set(data.map(v => v.patientId))];
+      const patientsData = await Promise.all(
+        patientIds.map(id => patientAPI.getById(id))
+      );
+
+      const patientMap = patientsData.reduce((acc, patient) => {
+        acc[patient.data.id] = patient.data;
+        return acc;
+      }, {} as { [key: number]: Patient });
+
+      setPatients(patientMap);
     } catch (err) {
-      setError('Failed to fetch vaccinations. Please try again later.');
+      console.error('Failed to fetch vaccinations', err);
+      setError('Failed to load vaccinations. Please try again.');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
     fetchVaccinations();
-  }, [page, rowsPerPage, searchQuery]);
+  }, [page, rowsPerPage]);
 
-  const handleChangePage = (event: unknown, newPage: number) => {
+  const handleChangePage = (_: React.MouseEvent<HTMLButtonElement> | null, newPage: number) => {
     setPage(newPage);
   };
 
-  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChangeRowsPerPage = (
+    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
   };
 
-  const handleAddVaccination = () => {
-    navigate('/clinical/vaccinations/new');
+  const handleEdit = (vaccination: Vaccination) => {
+    navigate(`/clinical/vaccinations/edit/${vaccination.id}`);
   };
 
-  const handleEditVaccination = (vaccination: Vaccination) => {
-    navigate(`/clinical/vaccinations/${vaccination.id}/edit`);
-  };
-
-  const handleViewVaccination = (vaccination: Vaccination) => {
-    navigate(`/clinical/vaccinations/${vaccination.id}`);
-  };
-
-  const handleDeleteClick = (vaccination: Vaccination) => {
+  const handleDeleteConfirmation = (vaccination: Vaccination) => {
     setSelectedVaccination(vaccination);
-    setDeleteDialogOpen(true);
+    setIsDeleteDialogOpen(true);
   };
 
-  const handleDeleteConfirm = async () => {
-    if (!selectedVaccination?.id) return;
-
-    try {
-      await vaccinationAPI.delete(selectedVaccination.id);
-      fetchVaccinations();
-      setDeleteDialogOpen(false);
-      setSelectedVaccination(null);
-    } catch (err) {
-      setError('Failed to delete vaccination record. Please try again later.');
+  const handleDelete = async () => {
+    if (selectedVaccination) {
+      try {
+        await vaccinationAPI.delete(selectedVaccination.id);
+        fetchVaccinations();
+        setIsDeleteDialogOpen(false);
+      } catch (error) {
+        console.error('Failed to delete vaccination', error);
+        setError('Failed to delete vaccination. Please try again.');
+      }
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'completed':
-        return 'success';
-      case 'scheduled':
-        return 'warning';
-      case 'overdue':
-        return 'error';
-      case 'cancelled':
-        return 'default';
-      default:
-        return 'primary';
-    }
+  const handleCloseDeleteDialog = () => {
+    setIsDeleteDialogOpen(false);
+    setSelectedVaccination(null);
   };
 
-  if (loading && vaccinations.length === 0) {
-    return <LoadingScreen />;
-  }
+  const handleCloseError = () => {
+    setError(null);
+  };
 
   return (
-    <Box p={3}>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" component="h1">
-          Vaccination Records
-        </Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={handleAddVaccination}
+    <div>
+      <Typography variant="h4" gutterBottom>
+        Vaccinations
+      </Typography>
+      <Button 
+        variant="contained" 
+        color="primary" 
+        onClick={() => navigate('/clinical/vaccinations/new')}
+        sx={{ mb: 2 }}
+      >
+        Add New Vaccination
+      </Button>
+
+      {error && (
+        <Snackbar 
+          open={!!error} 
+          autoHideDuration={6000} 
+          onClose={handleCloseError}
+          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
         >
-          New Vaccination Record
-        </Button>
-      </Box>
+          <Alert onClose={handleCloseError} severity="error" sx={{ width: '100%' }}>
+            {error}
+          </Alert>
+        </Snackbar>
+      )}
 
-      <Paper sx={{ width: '100%', mb: 2 }}>
-        <Box p={2}>
-          <TextField
-            fullWidth
-            variant="outlined"
-            placeholder="Search vaccinations..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </Box>
-
-        {error && (
-          <Box p={2}>
-            <Typography color="error">{error}</Typography>
-          </Box>
-        )}
-
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Date</TableCell>
-                <TableCell>Patient</TableCell>
-                <TableCell>Vaccine</TableCell>
-                <TableCell>Dose</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Next Due Date</TableCell>
-                <TableCell align="right">Actions</TableCell>
+      <TableContainer component={Paper}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>Patient Name</TableCell>
+              <TableCell>Vaccine Type</TableCell>
+              <TableCell>Dose Number</TableCell>
+              <TableCell>Administered Date</TableCell>
+              <TableCell>Status</TableCell>
+              <TableCell>Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {vaccinations.map((vaccination) => (
+              <TableRow key={vaccination.id}>
+                <TableCell>
+                  {patients[vaccination.patientId]?.firstName} {' '}
+                  {patients[vaccination.patientId]?.lastName}
+                </TableCell>
+                <TableCell>{vaccination.vaccineType}</TableCell>
+                <TableCell>{vaccination.doseNumber}</TableCell>
+                <TableCell>{new Date(vaccination.administeredDate).toLocaleDateString()}</TableCell>
+                <TableCell>{vaccination.status}</TableCell>
+                <TableCell>
+                  <Button 
+                    startIcon={<Edit />} 
+                    onClick={() => handleEdit(vaccination)}
+                  >
+                    Edit
+                  </Button>
+                  <Button 
+                    color="error" 
+                    startIcon={<Delete />} 
+                    onClick={() => handleDeleteConfirmation(vaccination)}
+                  >
+                    Delete
+                  </Button>
+                </TableCell>
               </TableRow>
-            </TableHead>
-            <TableBody>
-              {vaccinations.map((vaccination) => (
-                <TableRow key={vaccination.id}>
-                  <TableCell>{new Date(vaccination.date).toLocaleDateString()}</TableCell>
-                  <TableCell>{vaccination.patient.full_name}</TableCell>
-                  <TableCell>{vaccination.vaccine_name}</TableCell>
-                  <TableCell>{vaccination.dose_number}</TableCell>
-                  <TableCell>
-                    <Chip
-                      label={vaccination.status}
-                      color={getStatusColor(vaccination.status)}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    {vaccination.next_due_date
-                      ? new Date(vaccination.next_due_date).toLocaleDateString()
-                      : 'N/A'}
-                  </TableCell>
-                  <TableCell align="right">
-                    <Tooltip title="View Details">
-                      <IconButton onClick={() => handleViewVaccination(vaccination)}>
-                        <ViewIcon />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Edit">
-                      <IconButton onClick={() => handleEditVaccination(vaccination)}>
-                        <EditIcon />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Delete">
-                      <IconButton onClick={() => handleDeleteClick(vaccination)}>
-                        <DeleteIcon />
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-
+            ))}
+          </TableBody>
+        </Table>
         <TablePagination
           rowsPerPageOptions={[5, 10, 25]}
           component="div"
@@ -221,24 +193,31 @@ const VaccinationList: React.FC = () => {
           onPageChange={handleChangePage}
           onRowsPerPageChange={handleChangeRowsPerPage}
         />
-      </Paper>
+      </TableContainer>
 
-      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
-        <DialogTitle>Confirm Delete</DialogTitle>
+      <Dialog
+        open={isDeleteDialogOpen}
+        onClose={handleCloseDeleteDialog}
+      >
+        <DialogTitle>Confirm Deletion</DialogTitle>
         <DialogContent>
-          <Typography>
-            Are you sure you want to delete this vaccination record? This action cannot be
-            undone.
-          </Typography>
+          <DialogContentText>
+            Are you sure you want to delete this vaccination record? 
+            This action cannot be undone.
+          </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleDeleteConfirm} color="error">
+          <Button onClick={handleCloseDeleteDialog}>Cancel</Button>
+          <Button 
+            onClick={handleDelete} 
+            color="error" 
+            variant="contained"
+          >
             Delete
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </div>
   );
 };
 

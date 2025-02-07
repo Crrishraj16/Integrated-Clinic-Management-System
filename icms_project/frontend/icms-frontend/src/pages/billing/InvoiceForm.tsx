@@ -24,7 +24,7 @@ import {
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers';
 import { Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
-import { Invoice, Patient, Service } from '../../types';
+import { Invoice, InvoiceStatus, Patient, Service, PaymentMethod, PaymentStatus, BaseEntity } from '../../types';
 import { billingAPI } from '../../services/api/billing';
 import { patientAPI, serviceAPI } from '../../services/api';
 import LoadingScreen from '../../components/LoadingScreen';
@@ -37,6 +37,24 @@ interface InvoiceFormItem {
   discount: number;
   tax: number;
   total: number;
+  service?: Service;
+}
+
+interface InvoiceFormData {
+  patientId: number;
+  date: string;
+  dueDate: string;
+  status: InvoiceStatus;
+  paymentStatus: PaymentStatus;
+  paymentMethod: PaymentMethod;
+  items: InvoiceFormItem[];
+  subtotal: number;
+  discount: number;
+  tax: number;
+  total: number;
+  notes: string;
+  invoiceNumber?: string;
+  paymentTerms?: string;
 }
 
 const calculateItemTotal = (item: InvoiceFormItem) => {
@@ -55,20 +73,22 @@ const InvoiceForm: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [services, setServices] = useState<Service[]>([]);
-  const [items, setItems] = useState<InvoiceFormItem[]>([]);
+  const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
 
-  const [invoiceData, setInvoiceData] = useState<Partial<Invoice>>({
-    dateTime: new Date().toISOString(),
+  const [invoiceData, setInvoiceData] = useState<InvoiceFormData>({
+    patientId: 0,
+    date: new Date().toISOString(),
     dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
-    status: 'pending',
+    status: 'draft' as InvoiceStatus,
+    paymentStatus: 'pending' as PaymentStatus,
+    paymentMethod: 'cash' as PaymentMethod,
     items: [],
     subtotal: 0,
     discount: 0,
     tax: 0,
     total: 0,
     notes: '',
-    paymentMethod: 'cash',
   });
 
   useEffect(() => {
@@ -91,7 +111,7 @@ const InvoiceForm: React.FC = () => {
 
           // Set selected patient
           const patient = patientsResponse.data.data.find(
-            (p) => p.id === invoiceResponse.data.patient_id
+            (p) => p.id === invoiceResponse.data.patientId
           );
           setSelectedPatient(patient || null);
         }
@@ -108,47 +128,61 @@ const InvoiceForm: React.FC = () => {
   }, [id, isEdit]);
 
   const handleAddItem = () => {
-    setInvoiceData((prev) => ({
-      ...prev,
-      items: [
-        ...(prev.items || []),
-        {
-          serviceId: 0,
-          serviceName: '',
-          quantity: 1,
-          unitPrice: 0,
-          discount: 0,
-          tax: 0,
-          total: 0,
-        },
-      ],
-    }));
+    if (!selectedService) {
+      setError('Please select a service');
+      return;
+    }
+
+    const newItem: InvoiceFormItem = {
+      serviceId: selectedService.id,
+      serviceName: selectedService.name,
+      quantity: 1,
+      unitPrice: selectedService.price || 0,
+      discount: 0,
+      tax: 0,
+      total: selectedService.price || 0,
+      service: selectedService,
+    };
+
+    setInvoiceData((prev) => {
+      const items = [...prev.items, newItem];
+      return {
+        ...prev,
+        items,
+        subtotal: items.reduce((sum, item) => sum + item.total, 0),
+      };
+    });
+
+    setSelectedService(null);
+    setError(null);
   };
 
   const handleRemoveItem = (index: number) => {
-    setInvoiceData((prev) => ({
-      ...prev,
-      items: prev.items?.filter((_, i) => i !== index),
-    }));
-    updateTotals();
+    setInvoiceData((prev) => {
+      const items = prev.items.filter((_, i) => i !== index);
+      const subtotal = items.reduce((sum, item) => sum + item.total, 0);
+      const totalDiscount = items.reduce((sum, item) => sum + (item.total * item.discount / 100), 0);
+      const totalTax = items.reduce((sum, item) => sum + (item.total * item.tax / 100), 0);
+
+      return {
+        ...prev,
+        items,
+        subtotal,
+        discount: totalDiscount,
+        tax: totalTax,
+        total: subtotal - totalDiscount + totalTax,
+      };
+    });
   };
 
   const handleItemChange = (index: number, field: keyof InvoiceFormItem, value: any) => {
     setInvoiceData((prev) => {
-      const updatedItems = [...(prev.items || [])];
-      updatedItems[index] = {
-        ...updatedItems[index],
-        [field]: value,
-      };
-
-      if (field === 'serviceId') {
-        const service = services.find((s) => s.id === value);
-        if (service) {
-          updatedItems[index] = {
-            ...updatedItems[index],
-            serviceName: service.name,
-            unitPrice: service.cost,
-          };
+      const updatedItems = [...prev.items];
+      if (updatedItems[index]) {
+        if (field === 'quantity' || field === 'unitPrice') {
+          updatedItems[index][field] = parseFloat(value) || 0;
+        } else {
+          updatedItems[index][field] = value;
         }
       }
 
@@ -193,7 +227,7 @@ const InvoiceForm: React.FC = () => {
 
     const invoicePayload = {
       ...invoiceData,
-      patient_id: selectedPatient.id,
+      patientId: selectedPatient.id,
     };
 
     try {
@@ -237,7 +271,7 @@ const InvoiceForm: React.FC = () => {
                   setSelectedPatient(newValue);
                 }}
                 options={patients}
-                getOptionLabel={(option) => option.full_name}
+                getOptionLabel={(option) => option.fullName}
                 renderInput={(params) => <TextField {...params} label="Patient" required />}
               />
             </Grid>
@@ -246,7 +280,7 @@ const InvoiceForm: React.FC = () => {
               <TextField
                 fullWidth
                 label="Invoice Number"
-                value={invoiceData.invoice_number || ''}
+                value={invoiceData.invoiceNumber || ''}
                 disabled
                 helperText="Auto-generated on save"
               />
@@ -309,9 +343,9 @@ const InvoiceForm: React.FC = () => {
                         <TableCell>
                           <FormControl fullWidth>
                             <Select
-                              value={item.service_id}
+                              value={item.serviceId}
                               onChange={(e) =>
-                                handleItemChange(index, 'service_id', e.target.value)
+                                handleItemChange(index, 'serviceId', e.target.value)
                               }
                               required
                             >
@@ -337,11 +371,11 @@ const InvoiceForm: React.FC = () => {
                         <TableCell>
                           <TextField
                             type="number"
-                            value={item.unit_price}
+                            value={item.unitPrice}
                             onChange={(e) =>
                               handleItemChange(
                                 index,
-                                'unit_price',
+                                'unitPrice',
                                 parseFloat(e.target.value)
                               )
                             }
@@ -397,11 +431,11 @@ const InvoiceForm: React.FC = () => {
               <FormControl fullWidth>
                 <InputLabel>Payment Terms</InputLabel>
                 <Select
-                  value={invoiceData.payment_terms || 'net30'}
+                  value={invoiceData.paymentTerms || 'net30'}
                   onChange={(e) =>
                     setInvoiceData((prev) => ({
                       ...prev,
-                      payment_terms: e.target.value,
+                      paymentTerms: e.target.value,
                     }))
                   }
                   label="Payment Terms"
@@ -476,7 +510,7 @@ const InvoiceForm: React.FC = () => {
                   ).toFixed(2)}
                 </Typography>
                 <Typography variant="h6">
-                  Total: ${invoiceData.total_amount?.toFixed(2) || '0.00'}
+                  Total: ${invoiceData.total?.toFixed(2) || '0.00'}
                 </Typography>
               </Box>
             </Grid>

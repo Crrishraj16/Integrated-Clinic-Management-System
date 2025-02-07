@@ -18,7 +18,7 @@ import {
   StepLabel,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers';
-import { Patient, InsuranceInfo } from '../../types';
+import { Patient, InsuranceInfo } from '../../types/index';
 import { patientAPI } from '../../services/api';
 
 const steps = ['Personal Information', 'Medical Information', 'Insurance Information'];
@@ -47,6 +47,8 @@ const initialPatientState: Omit<Patient, 'id'> = {
     relationship: '',
     groupNumber: '',
   },
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
 };
 
 const PatientRegistration: React.FC = () => {
@@ -218,6 +220,7 @@ const PatientRegistration: React.FC = () => {
         />
       </Grid>
       <Grid item xs={12}>
+        <Divider sx={{ my: 2 }} />
         <Typography variant="h6" gutterBottom>
           Emergency Contact
         </Typography>

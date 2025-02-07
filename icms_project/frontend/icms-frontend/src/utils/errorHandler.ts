@@ -1,24 +1,83 @@
 import { ERROR_MESSAGES } from '../constants';
 
-interface ErrorResponse {
+interface ErrorMetadata {
+  context?: string;
+  timestamp: string;
+  userAgent: string;
+  url: string;
+  [key: string]: any;
+}
+
+interface ErrorReport {
+  message: string;
+  stack?: string;
+  metadata: ErrorMetadata;
+  type: string;
   status?: number;
-  message?: string;
   errors?: Record<string, string[]>;
 }
 
 class ApiError extends Error {
-  status: number;
-  errors?: Record<string, string[]>;
-
-  constructor(status: number, message: string, errors?: Record<string, string[]>) {
+  constructor(
+    message: string,
+    public status: number,
+    public errors?: Record<string, string[]>,
+    public data?: any
+  ) {
     super(message);
-    this.status = status;
-    this.errors = errors;
     this.name = 'ApiError';
   }
 }
 
-export const handleApiError = async (error: any): Promise<never> => {
+const isDevelopment = import.meta.env.MODE === 'development';
+
+const getErrorType = (error: unknown): string => {
+  if (error instanceof ApiError) return 'API_ERROR';
+  if (error instanceof TypeError) return 'TYPE_ERROR';
+  if (error instanceof SyntaxError) return 'SYNTAX_ERROR';
+  if (error instanceof Error) return 'ERROR';
+  return 'UNKNOWN';
+};
+
+const createErrorReport = (error: unknown, context?: string): ErrorReport => {
+  const metadata: ErrorMetadata = {
+    context,
+    timestamp: new Date().toISOString(),
+    userAgent: navigator.userAgent,
+    url: window.location.href,
+  };
+
+  let message: string;
+  let stack: string | undefined;
+  let status: number | undefined;
+  let errors: Record<string, string[]> | undefined;
+
+  if (error instanceof ApiError) {
+    message = error.message;
+    stack = error.stack;
+    status = error.status;
+    errors = error.errors;
+    metadata.data = error.data;
+  } else if (error instanceof Error) {
+    message = error.message;
+    stack = error.stack;
+  } else if (typeof error === 'string') {
+    message = error;
+  } else {
+    message = 'An unknown error occurred';
+  }
+
+  return {
+    message,
+    stack,
+    metadata,
+    type: getErrorType(error),
+    status,
+    errors,
+  };
+};
+
+export const handleApiError = async (error: unknown): Promise<never> => {
   if (error instanceof ApiError) {
     throw error;
   }

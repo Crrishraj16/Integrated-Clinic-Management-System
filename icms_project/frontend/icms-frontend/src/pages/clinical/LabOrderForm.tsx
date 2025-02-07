@@ -14,28 +14,79 @@ import {
   ListItem,
   ListItemText,
   ListItemSecondaryAction,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
 } from '@mui/material';
 import { Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers';
-import { LabOrder, LabTest, Patient, User } from '../../types';
-import { labAPI, patientAPI, userAPI } from '../../services/api';
-import LoadingScreen from '../../components/LoadingScreen';
+import { Patient, User } from '../../types';
 
-interface OrderTest extends Omit<LabTest, keyof BaseEntity> {
+export enum LabTestStatus {
+  PENDING = 'pending',
+  COMPLETED = 'completed',
+  CANCELLED = 'cancelled'
+}
+
+export enum Priority {
+  ROUTINE = 'routine',
+  URGENT = 'urgent',
+  STAT = 'stat'
+}
+
+interface BaseEntity {
+  id: number;
+  createdAt: string;
+  updatedAt: string;
+  status?: 'active' | 'inactive' | 'deleted';
+}
+
+interface LabTest {
+  id: number;
+  name: string;
+  description?: string;
+  price: number;
+  duration?: number;
+  requiredFasting: boolean;
+  instructions?: string;
+  category?: string;
+  normalRange?: string;
+  unit?: string;
+}
+
+interface LabTestOrder {
   testId: number;
   test?: LabTest;
   instructions?: string;
-  status: 'pending' | 'completed' | 'cancelled';
+  status: LabTestStatus;
+  priority: Priority;
+  name: string;
+  description: string;
 }
 
-const initialLabOrderState: Partial<LabOrder> = {
+interface LabOrder extends BaseEntity {
+  patientId: number;
+  doctorId: number;
+  date: string;
+  tests: LabTestOrder[];
+  notes?: string;
+  patient?: Patient;
+  doctor?: User;
+  status: LabTestStatus;
+  priority: Priority;
+}
+
+import { labAPI, patientAPI, userAPI } from '../../services/api';
+import LoadingScreen from '../../components/LoadingScreen';
+
+const initialLabOrderState: LabOrder = {
+  id: 0,
+  patientId: 0,
+  doctorId: 0,
   date: new Date().toISOString(),
   tests: [],
   notes: '',
+  status: LabTestStatus.PENDING,
+  priority: Priority.ROUTINE,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
 };
 
 const commonTests: Array<{ name: string; description?: string }> = [
@@ -57,17 +108,22 @@ const LabOrderForm: React.FC = () => {
   const location = useLocation();
   const isEdit = !!id;
 
-  const [labOrderData, setLabOrderData] = useState<Omit<LabOrder, keyof BaseEntity>>(initialLabOrderState as Omit<LabOrder, keyof BaseEntity>);
+  const [labOrder, setLabOrder] = useState<LabOrder>(initialLabOrderState);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<User[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [selectedDoctor, setSelectedDoctor] = useState<User | null>(null);
-  const [newTest, setNewTest] = useState<OrderTest & { testId: number }>({
+  const [newTest, setNewTest] = useState<LabTestOrder>({
     testId: 0,
+    name: '',
+    description: '',
+    price: 0,
+    requiredFasting: false,
     instructions: '',
-    status: 'pending',
+    status: LabTestStatus.PENDING,
+    priority: Priority.ROUTINE,
   });
 
   useEffect(() => {
@@ -86,7 +142,15 @@ const LabOrderForm: React.FC = () => {
         // If editing, fetch lab order details
         if (isEdit && id) {
           const labOrderResponse = await labAPI.getById(parseInt(id));
-          setLabOrderData(labOrderResponse.data);
+          const labOrder = labOrderResponse.data;
+          setLabOrder({
+            ...labOrder,
+            tests: labOrder.tests.map((test: LabTestOrder) => ({
+              ...test,
+              status: test.status || LabTestStatus.PENDING,
+              priority: test.priority || Priority.ROUTINE,
+            })),
+          });
 
           // Set selected patient and doctor
           const patient = patientsResponse.data.data.find(
@@ -119,29 +183,60 @@ const LabOrderForm: React.FC = () => {
   }, [id, isEdit, location.state]);
 
   const handleAddTest = (): void => {
-    if (!newTest.testId) {
+    if (!newTest.name) {
+      setError('Please select a test');
       return;
     }
 
-    setLabOrderData((prev) => ({
-      ...prev,
-      tests: [...(prev.tests || []), newTest],
-    }));
+    const test: LabTestOrder = {
+      ...newTest,
+      testId: Date.now(),
+    };
+
+    setLabOrder((prev) => {
+      const tests = [...(prev.tests || []), test];
+      const priority = tests.some(t => t.priority === Priority.STAT) ? Priority.STAT :
+                      tests.some(t => t.priority === Priority.URGENT) ? Priority.URGENT :
+                      Priority.ROUTINE;
+
+      return {
+        ...prev,
+        tests,
+        priority,
+      };
+    });
 
     setNewTest({
+      testId: 0,
       name: '',
-    price: 0,
-    requiredFasting: false,
+      description: '',
+      price: 0,
+      requiredFasting: false,
       instructions: '',
-      status: 'pending',
+      status: LabTestStatus.PENDING,
+      priority: Priority.ROUTINE,
     });
   };
 
   const handleRemoveTest = (index: number): void => {
-    setLabOrderData((prev) => ({
+    setLabOrder((prev) => ({
       ...prev,
-      tests: prev.tests?.filter((_, i) => i !== index),
+      tests: prev.tests.filter((_: LabTestOrder, i: number) => i !== index),
     }));
+  };
+
+  const handleTestChange = (index: number, field: keyof LabTestOrder, value: any) => {
+    setLabOrder((prev) => {
+      const newTests = [...prev.tests];
+      newTests[index] = {
+        ...newTests[index],
+        [field]: value,
+      };
+      return {
+        ...prev,
+        tests: newTests,
+      };
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
@@ -152,21 +247,38 @@ const LabOrderForm: React.FC = () => {
       return;
     }
 
-    if (!labOrderData.tests?.length) {
+    if (!labOrder.tests.length) {
       setError('Please add at least one test');
       return;
     }
 
-    const labOrderPayload = {
-      ...labOrderData,
-      patientId: selectedPatient.id,
-      doctorId: selectedDoctor.id,
-      status: 'pending' as LabTestStatus,
-      date: new Date().toISOString(),
-    };
-
     try {
       setLoading(true);
+
+      // Validate test priorities
+      const hasStatTest = labOrder.tests.some(test => test.priority === Priority.STAT);
+      const hasUrgentTest = labOrder.tests.some(test => test.priority === Priority.URGENT);
+
+      const labOrderPayload: Omit<LabOrder, keyof BaseEntity> = {
+        ...labOrder,
+        patientId: selectedPatient.id,
+        doctorId: selectedDoctor.id,
+        status: LabTestStatus.PENDING,
+        priority: hasStatTest ? Priority.STAT :
+                 hasUrgentTest ? Priority.URGENT :
+                 Priority.ROUTINE,
+        date: new Date().toISOString(),
+        tests: labOrder.tests.map(test => ({
+          testId: test.testId,
+          test: test.test,
+          instructions: test.instructions,
+          status: test.status,
+          priority: test.priority,
+          name: test.name,
+          description: test.description,
+        })),
+      };
+
       if (isEdit && id) {
         await labAPI.update(parseInt(id), labOrderPayload);
       } else {
@@ -174,13 +286,14 @@ const LabOrderForm: React.FC = () => {
       }
       navigate('/clinical/lab');
     } catch (err) {
+      console.error('Error saving lab order:', err);
       setError('Failed to save lab order. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  if (loading && !labOrderData) {
+  if (loading && !labOrder) {
     return <LoadingScreen />;
   }
 
@@ -202,11 +315,11 @@ const LabOrderForm: React.FC = () => {
             <Grid item xs={12} sm={6}>
               <Autocomplete
                 value={selectedPatient}
-                onChange={(_event: any, newValue: Patient | null) => {
+                onChange={(_: any, newValue: Patient | null) => {
                   setSelectedPatient(newValue);
                 }}
                 options={patients}
-                getOptionLabel={(option: Patient) => option.fullName}
+                getOptionLabel={(option: Patient) => `${option.firstName} ${option.lastName}`}
                 renderInput={(params) => <TextField {...params} label="Patient" required />}
               />
             </Grid>
@@ -214,7 +327,7 @@ const LabOrderForm: React.FC = () => {
             <Grid item xs={12} sm={6}>
               <Autocomplete
                 value={selectedDoctor}
-                onChange={(_event: any, newValue: User | null) => {
+                onChange={(_: any, newValue: User | null) => {
                   setSelectedDoctor(newValue);
                 }}
                 options={doctors}
@@ -226,9 +339,9 @@ const LabOrderForm: React.FC = () => {
             <Grid item xs={12} sm={6}>
               <DatePicker
                 label="Date"
-                value={labOrderData.date ? new Date(labOrderData.date) : null}
+                value={labOrder.date ? new Date(labOrder.date) : null}
                 onChange={(date) =>
-                  setLabOrderData((prev) => ({
+                  setLabOrder((prev) => ({
                     ...prev,
                     date: date?.toISOString() || new Date().toISOString(),
                   }))
@@ -244,23 +357,33 @@ const LabOrderForm: React.FC = () => {
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={5}>
                   <Autocomplete
-                    freeSolo
-                    value={newTest.test?.name || ''}
-                    onChange={(event, newValue) =>
-                      setNewTest((prev) => ({
-                        ...prev,
-                        testId: tests.find(t => t.name === newValue)?.id || 0,
-                        test: tests.find(t => t.name === newValue),
-                      }))
-                    }
-                    onInputChange={(event, newValue) =>
-                      setNewTest((prev) => ({
-                        ...prev,
-                        testId: tests.find(t => t.name === newValue)?.id || 0,
-                        test: tests.find(t => t.name === newValue),
-                      }))
-                    }
-                    options={tests.map(t => t.name)}
+                    value={commonTests.find(t => t.name === newTest.name) || null}
+                    onChange={(_: any, value: { name: string; description?: string } | null) => {
+                      if (value) {
+                        setNewTest(prev => ({
+                          ...prev,
+                          testId: Date.now(),
+                          name: value.name,
+                          description: value.description || '',
+                          price: 0,
+                          requiredFasting: false,
+                        }));
+                      }
+                    }}
+                    options={commonTests}
+                    getOptionLabel={(option) => option.name}
+                    renderOption={(props, option) => (
+                      <li {...props}>
+                        <div>
+                          <Typography variant="subtitle1">{option.name}</Typography>
+                          {option.description && (
+                            <Typography variant="body2" color="text.secondary">
+                              {option.description}
+                            </Typography>
+                          )}
+                        </div>
+                      </li>
+                    )}
                     renderInput={(params) => (
                       <TextField {...params} label="Test Name" fullWidth />
                     )}
@@ -292,17 +415,24 @@ const LabOrderForm: React.FC = () => {
               </Grid>
 
               <List sx={{ mt: 2 }}>
-                {labOrderData.tests?.map((test, index) => (
+                {labOrder.tests.map((test: LabTestOrder, index: number) => (
                   <ListItem key={index}>
                     <ListItemText
-                      primary={test.test?.name || ''}
-                      secondary={test.instructions || 'No special instructions'}
+                      primary={test.name}
+                      secondary={
+                        <>
+                          {test.description && <div>{test.description}</div>}
+                          <div>{test.instructions || 'No special instructions'}</div>
+                          <div>Status: {test.status}</div>
+                          <div>Priority: {test.priority}</div>
+                        </>
+                      }
                     />
                     <ListItemSecondaryAction>
                       <IconButton
                         edge="end"
                         aria-label="delete"
-                        onClick={() => handleRemoveTest(index)}
+                        onClick={() => handleRemoveTest(index as number)}
                       >
                         <DeleteIcon />
                       </IconButton>
@@ -316,9 +446,9 @@ const LabOrderForm: React.FC = () => {
               <TextField
                 fullWidth
                 label="Notes"
-                value={labOrderData.notes || ''}
+                value={labOrder.notes}
                 onChange={(e) =>
-                  setLabOrderData((prev) => ({
+                  setLabOrder((prev) => ({
                     ...prev,
                     notes: e.target.value,
                   }))

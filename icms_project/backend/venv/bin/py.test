@@ -1,4 +1,4 @@
-#!/Users/crrishrajsinhchavda/CascadeProjects/icms_project/backend/venv/bin/python3
+#!/Users/crrishrajsinhchavda/DMP/icms_project/backend/venv/bin/python3
 # -*- coding: utf-8 -*-
 import re
 import sys

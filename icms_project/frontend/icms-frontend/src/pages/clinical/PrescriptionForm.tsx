@@ -17,7 +17,7 @@ import {
 } from '@mui/material';
 import { Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers';
-import { Prescription, Patient, User } from '../../types';
+import { Prescription, Patient, User, PrescriptionStatus, BaseEntity } from '../../types';
 import { prescriptionAPI, patientAPI, userAPI } from '../../services/api';
 import LoadingScreen from '../../components/LoadingScreen';
 
@@ -26,14 +26,29 @@ interface Medication {
   dosage: string;
   frequency: string;
   duration: string;
+  route?: string;
+  instructions?: string;
+  sideEffects?: string;
   notes?: string;
 }
 
-const initialPrescriptionState: Partial<Prescription> = {
+type PrescriptionFormData = Omit<Prescription, keyof BaseEntity> & {
+  patientId: number;
+  doctorId: number;
+  medications: Medication[];
+  diagnosis: string;
+  notes?: string;
+  status: PrescriptionStatus;
+};
+
+const initialPrescriptionState: PrescriptionFormData = {
+  patientId: 0,
+  doctorId: 0,
   date: new Date().toISOString(),
   medications: [],
   diagnosis: '',
   notes: '',
+  status: 'active' as PrescriptionStatus,
 };
 
 const PrescriptionForm: React.FC = () => {
@@ -42,9 +57,7 @@ const PrescriptionForm: React.FC = () => {
   const location = useLocation();
   const isEdit = !!id;
 
-  const [prescriptionData, setPrescriptionData] = useState<Partial<Prescription>>(
-    initialPrescriptionState
-  );
+  const [prescriptionData, setPrescriptionData] = useState<PrescriptionFormData>(initialPrescriptionState);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -109,12 +122,30 @@ const PrescriptionForm: React.FC = () => {
 
   const handleAddMedication = () => {
     if (!newMedication.name || !newMedication.dosage || !newMedication.frequency || !newMedication.duration) {
+      setError('Please fill in all required medication fields');
+      return;
+    }
+
+    // Validate dosage format
+    const dosagePattern = /^\d+(\.\d+)?\s*(mg|ml|g|mcg|IU)$/i;
+    if (!dosagePattern.test(newMedication.dosage)) {
+      setError('Please enter a valid dosage (e.g., 500 mg, 5 ml)');
+      return;
+    }
+
+    // Validate frequency format
+    const frequencyPattern = /^(once|twice|thrice|\d+\s*times?)\s*(daily|weekly|monthly|every\s*\d+\s*hours?)$/i;
+    if (!frequencyPattern.test(newMedication.frequency)) {
+      setError('Please enter a valid frequency (e.g., twice daily, every 8 hours)');
       return;
     }
 
     setPrescriptionData((prev) => ({
       ...prev,
-      medications: [...(prev.medications || []), newMedication],
+      medications: [...prev.medications, {
+        ...newMedication,
+        instructions: newMedication.instructions || `Take ${newMedication.dosage} ${newMedication.frequency}`,
+      }],
     }));
 
     setNewMedication({
@@ -122,15 +153,23 @@ const PrescriptionForm: React.FC = () => {
       dosage: '',
       frequency: '',
       duration: '',
+      route: '',
+      instructions: '',
+      sideEffects: '',
       notes: '',
     });
+    setError(null);
   };
 
   const handleRemoveMedication = (index: number) => {
-    setPrescriptionData((prev) => ({
-      ...prev,
-      medications: prev.medications?.filter((_, i) => i !== index),
-    }));
+    setPrescriptionData((prev) => {
+      const medications = prev.medications.filter((_, i) => i !== index);
+      return {
+        ...prev,
+        medications,
+        status: medications.length === 0 ? 'cancelled' as PrescriptionStatus : prev.status,
+      };
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -146,21 +185,33 @@ const PrescriptionForm: React.FC = () => {
       return;
     }
 
-    const prescriptionPayload = {
-      ...prescriptionData,
-      patient_id: selectedPatient.id,
-      doctor_id: selectedDoctor.id,
-    };
+    if (!prescriptionData.diagnosis) {
+      setError('Please enter a diagnosis');
+      return;
+    }
 
     try {
       setLoading(true);
+      const prescriptionPayload = {
+        ...prescriptionData,
+        patientId: selectedPatient.id,
+        doctorId: selectedDoctor.id,
+        date: new Date().toISOString(),
+        status: prescriptionData.status || 'active',
+        medications: prescriptionData.medications.map(med => ({
+          ...med,
+          instructions: med.instructions || `Take ${med.dosage} ${med.frequency}`,
+        })),
+      };
+
       if (isEdit && id) {
         await prescriptionAPI.update(parseInt(id), prescriptionPayload);
       } else {
-        await prescriptionAPI.create(prescriptionPayload as Omit<Prescription, 'id'>);
+        await prescriptionAPI.create(prescriptionPayload);
       }
       navigate('/clinical/prescriptions');
     } catch (err) {
+      console.error('Error saving prescription:', err);
       setError('Failed to save prescription. Please try again.');
     } finally {
       setLoading(false);

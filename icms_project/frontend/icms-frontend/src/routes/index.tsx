@@ -6,8 +6,8 @@ import ProtectedRoute from '../components/ProtectedRoute';
 const Login = lazy(() => import('../pages/Login'));
 const Register = lazy(() => import('../pages/Register'));
 const Dashboard = lazy(() => import('../pages/Dashboard'));
-const Appointments = lazy(() => import('../pages/Appointments'));
-const Patients = lazy(() => import('../pages/Patients'));
+const Appointments = lazy(() => import('../pages/appointments'));
+const Patients = lazy(() => import('../pages/patients'));
 const Profile = lazy(() => import('../pages/Profile'));
 const Settings = lazy(() => import('../pages/Settings'));
 

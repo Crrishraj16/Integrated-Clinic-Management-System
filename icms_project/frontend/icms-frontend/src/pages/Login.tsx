@@ -1,61 +1,71 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import {
-  Container,
-  Box,
-  Typography,
-  TextField,
-  Button,
-  Alert,
-  Paper,
-  Link,
+import React from 'react';
+import { 
+  useNavigate, 
+  useLocation, 
+  Link as RouterLink 
+} from 'react-router-dom';
+import { 
+  Button, 
+  TextField, 
+  Container, 
+  Typography, 
+  Box, 
+  Link, 
   CircularProgress,
+  Grid,
+  Paper
 } from '@mui/material';
-import { AxiosError } from 'axios';
-import { authAPI } from '../services/api';
-import { LoginCredentials } from '../types';
+import { useForm, Controller } from 'react-hook-form';
+import { yupResolver } from '@hookform/resolvers/yup';
+import * as yup from 'yup';
+import { useAuth } from '../context/AppContext';
+import { login } from '../services/auth';
+import { LoginData } from '../types';
+
+// Validation Schema
+const loginSchema = yup.object().shape({
+  email: yup
+    .string()
+    .email('Invalid email format')
+    .required('Email is required'),
+  password: yup
+    .string()
+    .min(8, 'Password must be at least 8 characters')
+    .required('Password is required')
+});
+
+interface LoginFormData {
+  email: string;
+  password: string;
+}
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState<LoginCredentials>({
-    email: '',
-    password: '',
-  });
-  const [error, setError] = useState<string>('');
-  const [loading, setLoading] = useState(false);
+  const location = useLocation();
+  const { setUser } = useAuth();
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value,
-    }));
-    // Clear error when user starts typing
-    if (error) setError('');
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    if (!formData.email || !formData.password) {
-      setError('Please fill in all fields');
-      setLoading(false);
-      return;
+  const { 
+    control, 
+    handleSubmit, 
+    formState: { errors, isSubmitting } 
+  } = useForm<LoginFormData>({
+    resolver: yupResolver(loginSchema),
+    defaultValues: {
+      email: '',
+      password: ''
     }
+  });
 
+  const onSubmit = async (data: LoginFormData) => {
     try {
-      const { data } = await authAPI.login(formData);
-      localStorage.setItem('token', data.token);
-      navigate('/dashboard');
-    } catch (err) {
-      const axiosError = err as AxiosError<{ detail: string }>;
-      setError(
-        axiosError.response?.data?.detail || 'An error occurred during login'
-      );
-    } finally {
-      setLoading(false);
+      const user = await login(data);
+      if (user) {
+        setUser(user);
+        const from = location.state?.from?.pathname || '/dashboard';
+        navigate(from, { replace: true });
+      }
+    } catch (error) {
+      console.error('Login failed', error);
     }
   };
 
@@ -88,82 +98,69 @@ const Login: React.FC = () => {
             </Typography>
           </Box>
 
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          )}
-
-          <Box component="form" onSubmit={handleSubmit} noValidate sx={{ mt: 1, width: '100%' }}>
-            <TextField
-              margin="normal"
-              required
-              fullWidth
-              id="email"
-              label="Email Address"
-              name="email"
-              autoComplete="email"
-              autoFocus
-              value={formData.email}
-              onChange={handleChange}
-              disabled={loading}
-              error={!!error}
-              sx={{ mb: 2 }}
-            />
-            <TextField
-              margin="normal"
-              required
-              fullWidth
-              name="password"
-              label="Password"
-              type="password"
-              id="password"
-              autoComplete="current-password"
-              value={formData.password}
-              onChange={handleChange}
-              disabled={loading}
-              error={!!error}
-              sx={{ mb: 3 }}
-            />
-            <Button
-              type="submit"
-              fullWidth
-              variant="contained"
-              size="large"
-              disabled={loading}
-              sx={{
-                mt: 1,
-                mb: 2,
-                py: 1.5,
-                position: 'relative',
-              }}
-            >
-              {loading ? (
-                <CircularProgress
-                  size={24}
-                  sx={{
-                    position: 'absolute',
-                    top: '50%',
-                    left: '50%',
-                    marginTop: '-12px',
-                    marginLeft: '-12px',
-                  }}
+          <Box
+            component="form"
+            onSubmit={handleSubmit(onSubmit)}
+            noValidate
+            sx={{ mt: 1, width: '100%' }}
+          >
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <Controller
+                  name="email"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      variant="outlined"
+                      fullWidth
+                      label="Email Address"
+                      autoComplete="email"
+                      autoFocus
+                      error={!!errors.email}
+                      helperText={errors.email?.message}
+                      disabled={isSubmitting}
+                    />
+                  )}
                 />
-              ) : (
-                'Sign In'
-              )}
-            </Button>
+              </Grid>
+              <Grid item xs={12}>
+                <Controller
+                  name="password"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      variant="outlined"
+                      fullWidth
+                      label="Password"
+                      type="password"
+                      autoComplete="current-password"
+                      error={!!errors.password}
+                      helperText={errors.password?.message}
+                      disabled={isSubmitting}
+                    />
+                  )}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <Button
+                  type="submit"
+                  fullWidth
+                  variant="contained"
+                  color="primary"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <CircularProgress size={24} />
+                  ) : (
+                    'Sign In'
+                  )}
+                </Button>
+              </Grid>
+            </Grid>
             <Box sx={{ textAlign: 'center' }}>
-              <Link 
-                href="/register" 
-                variant="body2"
-                sx={{
-                  textDecoration: 'none',
-                  '&:hover': {
-                    textDecoration: 'underline',
-                  },
-                }}
-              >
+              <Link component={RouterLink} to="/register" variant="body2">
                 Don't have an account? Sign Up
               </Link>
             </Box>
