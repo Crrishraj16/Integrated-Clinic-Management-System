@@ -20,7 +20,7 @@ export interface RegisterData extends Omit<LoginCredentials, 'email'> {
 }
 
 export interface AuthResponse {
-  token: string;
+  access_token: string;
   token_type: string;
   user: User;
 }

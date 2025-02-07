@@ -18,7 +18,6 @@ import {
   useTheme,
   ListItemButton,
   Collapse,
-  SvgIcon,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -111,37 +110,25 @@ export default function MainLayout({ children }: MainLayoutProps) {
   const theme = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
-  const [open, setOpen] = useState(true);
-  const [expandedItems, setExpandedItems] = useState<string[]>([]);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   const handleDrawerToggle = () => {
-    setOpen(!open);
+    setMobileOpen(!mobileOpen);
   };
 
-  const handleItemClick = (path: string | undefined) => {
-    if (path) {
-      navigate(path);
-    }
-  };
-
-  const handleExpandClick = (title: string) => {
-    setExpandedItems((prev) =>
-      prev.includes(title) ? prev.filter((item) => item !== title) : [...prev, title]
-    );
-  };
-
-  const handleProfileMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+  const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
   };
 
-  const handleProfileMenuClose = () => {
+  const handleMenuClose = () => {
     setAnchorEl(null);
   };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     navigate('/login');
+    handleMenuClose();
   };
 
   const renderNavItem = ({ item, depth = 0 }: NavItemProps) => {
@@ -158,7 +145,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
     };
 
     return (
-      <>
+      <div key={item.title}>
         <ListItemButton
           onClick={handleClick}
           sx={{
@@ -179,13 +166,15 @@ export default function MainLayout({ children }: MainLayoutProps) {
         {item.children && (
           <Collapse in={open} timeout="auto" unmountOnExit>
             <List component="div" disablePadding>
-              {item.children.map((child, index) => (
-                renderNavItem({ item: child, depth: depth + 1 })
+              {item.children.map((child) => (
+                <div key={child.title}>
+                  {renderNavItem({ item: child, depth: depth + 1 })}
+                </div>
               ))}
             </List>
           </Collapse>
         )}
-      </>
+      </div>
     );
   };
 
@@ -195,8 +184,8 @@ export default function MainLayout({ children }: MainLayoutProps) {
       <AppBar
         position="fixed"
         sx={{
-          width: open ? `calc(100% - ${drawerWidth}px)` : '100%',
-          ml: open ? `${drawerWidth}px` : 0,
+          width: mobileOpen ? `calc(100% - ${drawerWidth}px)` : '100%',
+          ml: mobileOpen ? `${drawerWidth}px` : 0,
           transition: theme.transitions.create(['margin', 'width'], {
             easing: theme.transitions.easing.sharp,
             duration: theme.transitions.duration.leavingScreen,
@@ -221,7 +210,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
           </IconButton>
           <Tooltip title="Account settings">
             <IconButton
-              onClick={handleProfileMenuOpen}
+              onClick={handleMenuClick}
               size="small"
               sx={{ ml: 2 }}
               aria-controls={Boolean(anchorEl) ? 'account-menu' : undefined}
@@ -235,8 +224,8 @@ export default function MainLayout({ children }: MainLayoutProps) {
             anchorEl={anchorEl}
             id="account-menu"
             open={Boolean(anchorEl)}
-            onClose={handleProfileMenuClose}
-            onClick={handleProfileMenuClose}
+            onClose={handleMenuClose}
+            onClick={handleMenuClose}
             transformOrigin={{ horizontal: 'right', vertical: 'top' }}
             anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
           >
@@ -273,13 +262,17 @@ export default function MainLayout({ children }: MainLayoutProps) {
         }}
         variant="persistent"
         anchor="left"
-        open={open}
+        open={mobileOpen}
       >
         <Toolbar />
         <Divider />
         <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
           <List>
-            {navItems.map((item) => renderNavItem({ item }))}
+            {navItems.map((item) => (
+              <div key={item.title}>
+                {renderNavItem({ item })}
+              </div>
+            ))}
           </List>
         </Box>
         <Divider />
@@ -289,8 +282,8 @@ export default function MainLayout({ children }: MainLayoutProps) {
         sx={{
           flexGrow: 1,
           p: 3,
-          width: `calc(100% - ${open ? drawerWidth : 0}px)`,
-          ml: `${open ? drawerWidth : 0}px`,
+          width: `calc(100% - ${mobileOpen ? drawerWidth : 0}px)`,
+          ml: `${mobileOpen ? drawerWidth : 0}px`,
           transition: theme.transitions.create(['margin', 'width'], {
             easing: theme.transitions.easing.sharp,
             duration: theme.transitions.duration.leavingScreen,
